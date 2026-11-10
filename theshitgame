@@ -6527,10 +6527,11 @@ do -- own scope (keeps the top level under Luau's 200-local limit)
                     if rods[rodId] == nil or os.clock() - (fstate["reel" .. rodId] or 0) > 90 or rodLow(f, rods[rodId]) then need = true end
                 end
                 if bowlDue and not collected then need = true end
-                if need and not (window.hubHatchInfo and window.hubHatchInfo().running) then
+                if need then -- (v1.4.60) also while hatching: the trip lock makes Auto Hatch wait, then you go back to the egg
                     acquireTrip("fish")
                     local root = getRoot()
                     local home = root and root.CFrame
+                    local homeIsland = game:GetService("Players").LocalPlayer:GetAttribute("CurrentIsland")
                     local ok, err = pcall(function()
                         local info = spotInfo(spot)
                         if not info then
@@ -6561,6 +6562,14 @@ do -- own scope (keeps the top level under Luau's 200-local limit)
                         if bowlDue and not collected and fishOn then collectBowl() end
                     end)
                     if not ok then warn("[HustlHub] Auto Fish error:", err) end
+                    -- the spot can be on another island: travel back to the one you were on before returning to your spot
+                    local lp = game:GetService("Players").LocalPlayer
+                    if homeIsland and lp:GetAttribute("CurrentIsland") ~= homeIsland then
+                        pcall(function() safeInvoke(Remotes.IslandService.RF.Travel, { ["Island"] = homeIsland, ["Source"] = "Portal" }) end)
+                        local t0 = os.clock()
+                        repeat task.wait(0.3) until lp:GetAttribute("CurrentIsland") == homeIsland or os.clock() - t0 > 10
+                        task.wait(1)
+                    end
                     local back = getRoot()
                     if back and home then window.hubReturnTo(home) end
                     task.wait(0.3)
